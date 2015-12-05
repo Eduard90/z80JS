@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+	<head>
+		<script src='js/jquery-1.11.3.min.js'></script>
+		
+		<script src='js/z80.js'></script>
+		<script src='js/app.js'></script>
+		
+		<!--<script src='https://ajax.googleapis.com/ajax/libs/angularjs/1.4.7/angular.min.js'></script>-->
+		<!--<script src='js/angularApp.js'></script>-->
+		
+		<style>
+			body {
+				font-family: Monospace;
+				font-size: 14px;
+			}
+			textarea#text {
+				width: 150px;
+				height: 200px;
+			}
+			
+			#cur_str {
+				float: left;
+				width: 20px;
+				height: 15px;
+				background: red;
+				margin-top: 0px;
+			}
+			#cpu_info {
+				float: left;
+				margin-right: 50px;
+				width: 100px;
+			}
+			#cpu_info > div > span {
+				display: inline-block;
+				width: 20px;
+				text-align: center;
+			}
+			span.hex {
+				text-transform: uppercase;
+			}
+			
+			#flags {
+				margin-top: 10px;
+			}
+			
+			#flag_yf, #flag_xf {
+				color: #AAA;
+			}
+		</style>
+	</head>
+	
+	<body>
+		<div id='emulator'>
+			<div id='cpu_info'>
+				<div id='regs_a'>A: <span class='dec'>0</span> (<span class='hex'></span>)</div>
+				<div id='regs_b'>B: <span class='dec'>0</span> (<span class='hex'></span>)</div>
+				<div id='regs_c'>C: <span class='dec'>0</span> (<span class='hex'></span>)</div>
+				<div id='regs_d'>D: <span class='dec'>0</span> (<span class='hex'></span>)</div>
+				<div id='regs_e'>E: <span class='dec'>0</span> (<span class='hex'></span>)</div>
+				<div id='regs_h'>H: <span class='dec'>0</span> (<span class='hex'></span>)</div>
+				<div id='regs_l'>L: <span class='dec'>0</span> (<span class='hex'></span>)</div>
+				
+				<div id='flags'>
+					<div id='flag_sf'>SF: <span>0</span></div>
+					<div id='flag_zf'>ZF: <span>0</span></div>
+					<div id='flag_yf'>YF: <span>0</span></div>
+					<div id='flag_hf'>HF: <span>0</span></div>
+					<div id='flag_xf'>XF: <span>0</span></div>
+					<div id='flag_pf'>PF: <span>0</span></div>
+					<div id='flag_nf'>NF: <span>0</span></div>
+					<div id='flag_cf'>CF: <span>0</span></div>
+				</div>
+			</div>
+			<div id='code_source'>
+				<input type='radio' value='file' class='source' name='source'> Из файла (bin)<br>
+				<input id='file' type='file'>
+				<br><br>
+				<input type='radio' value='text' class='source' name='source' checked> Из поля<br>
+
+				<div id='editor'>
+					<div id='cur_str'></div>
+					<textarea id='text'></textarea>
+				</div>
+
+				<br><br>
+				<button id='run'>Запустить</button>
+			</div>
+		</div>
+		<script>
+			function pad(num, size) {
+				var s = num+"";
+				while (s.length < size) s = "0" + s;
+				return s;
+			}
+
+			function convertDataURIToBinary(base64) {
+				var raw = window.atob(base64);
+				var rawLength = raw.length;
+				var array = new Uint8Array(new ArrayBuffer(rawLength));
+
+				for(i = 0; i < rawLength; i++) {
+					array[i] = raw.charCodeAt(i);
+				}
+				return array;
+			}
+			
+			function refreshRegs() {
+				var regs = Object.keys(z80._regs);
+				for(var i = 0; i < regs.length; i++) {
+					var reg = regs[i];
+					if ($('#regs_'+reg).length) {
+						$('#regs_'+reg+' > span.dec').text(z80._regs[reg]);
+						$('#regs_'+reg+' > span.hex').text(z80._regs[reg].toString(16));
+					}
+				}
+			}
+			
+			// Need rewrite. Try 11 + 5 (Flags with errors =( )
+			function refreshFlags() {
+				var flagsBinStr = (z80._regs.f >>> 0).toString(2);
+				flagsBinStr = pad(flagsBinStr, 8);
+				for(var i = 0; i < flagsBinStr.length; i++) {
+					$('#flags  > div').eq(i).find('>span').text(flagsBinStr[i]);
+				}
+			}
+			
+			function refreshGUI() {
+				refreshRegs();
+				refreshFlags();
+				
+				var marginTop = parseInt($('#cur_str').css('margin-top'));
+				marginTop += 15;
+				$('#cur_str').css('margin-top', marginTop);
+			}
+			
+			$(document).ready(function() {
+				var bin = null;
+				var file = null;
+
+				
+				$('#run').on('click', function() {
+					var source = $('[name=source]:checked').val();
+					
+					if (source == 'file') {
+						var file = $('#file')[0].files[0];
+						var reader = new FileReader();
+						reader.onload = function(event) {
+							var content = event.target.result;
+							var contentArr = new Uint8Array(content);
+							
+							for(var i = 0; i < contentArr.length; i++) {
+								console.log(contentArr[i]);
+							}
+							
+							bin = contentArr;
+							
+							app.load(bin);
+							app.start();
+						}
+						
+						reader.readAsArrayBuffer(file);
+					} else if (source == 'text') {
+						var text = $('textarea#text').val();
+						$.post('asm.php', {text: text}, function(resp) {
+							bin = convertDataURIToBinary(resp);
+
+							$('#cur_str').css('margin-top', 0);
+							app.load(bin);
+							app.start(function() {
+								refreshGUI();
+							});
+						});
+					}
+				});
+
+			});
+		</script>
+	</body>
+</html>
